@@ -1,0 +1,3 @@
+qa\andrea\core\BaseTest.class
+qa\andrea\tests\LoginTest.class
+qa\andrea\support\TestListener.class

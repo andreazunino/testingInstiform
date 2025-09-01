@@ -1,0 +1,119 @@
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <groupId>qa.andrea</groupId>
+  <artifactId>ui-tests-healenium</artifactId>
+  <version>1.0.0</version>
+  <name>ui-tests-healenium</name>
+
+  <properties>
+    <maven.compiler.release>21</maven.compiler.release>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+    <selenium.version>4.23.0</selenium.version>
+    <testng.version>7.10.2</testng.version>
+    <wdu.version>5.9.2</wdu.version>
+    <healenium.version>3.5.6</healenium.version>
+    <httpclient5.version>5.3.1</httpclient5.version>
+    <jackson.version>2.17.2</jackson.version>
+    <commonsio.version>2.16.1</commonsio.version>
+  </properties>
+
+  <dependencies>
+    <!-- Selenium + TestNG -->
+    <dependency>
+      <groupId>org.seleniumhq.selenium</groupId>
+      <artifactId>selenium-java</artifactId>
+      <version>${selenium.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.testng</groupId>
+      <artifactId>testng</artifactId>
+      <version>${testng.version}</version>
+      <scope>test</scope>
+    </dependency>
+
+    <!-- WebDriverManager -->
+    <dependency>
+      <groupId>io.github.bonigarcia</groupId>
+      <artifactId>webdrivermanager</artifactId>
+      <version>${wdu.version}</version>
+    </dependency>
+
+    <!-- Healenium (cliente web) -->
+    <dependency>
+      <groupId>com.epam.healenium</groupId>
+      <artifactId>healenium-web</artifactId>
+      <version>${healenium.version}</version>
+    </dependency>
+
+    <!-- HTTP + JSON + utilidades -->
+    <dependency>
+      <groupId>org.apache.httpcomponents.client5</groupId>
+      <artifactId>httpclient5</artifactId>
+      <version>${httpclient5.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.httpcomponents.core5</groupId>
+      <artifactId>httpcore5</artifactId>
+      <version>${httpclient5.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+      <version>${jackson.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>${commonsio.version}</version>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <!-- Compilación a release 21 (tu JDK 24 sirve igual) -->
+      <plugin>
+        <artifactId>maven-compiler-plugin</artifactId>
+        <version>3.13.0</version>
+        <configuration>
+          <release>${maven.compiler.release}</release>
+        </configuration>
+      </plugin>
+
+      <!-- Surefire usando TestNG y la suite testng.xml -->
+      <plugin>
+        <artifactId>maven-surefire-plugin</artifactId>
+        <version>3.2.5</version>
+        <dependencies>
+          <dependency>
+            <groupId>org.apache.maven.surefire</groupId>
+            <artifactId>surefire-testng</artifactId>
+            <version>3.2.5</version>
+          </dependency>
+        </dependencies>
+        <configuration>
+          <includes>
+            <include>**/*Test.java</include>
+          </includes>
+          <suiteXmlFiles>
+            <suiteXmlFile>src/test/resources/testng.xml</suiteXmlFile>
+          </suiteXmlFiles>
+          <useModulePath>false</useModulePath>
+          <systemPropertyVariables>
+            <CI>${env.CI}</CI>
+          </systemPropertyVariables>
+        </configuration>
+      </plugin>
+
+      <!-- (opcional) para correr utilitarios con main, p.ej. LocatorUpdater -->
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>
