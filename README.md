@@ -1,6 +1,5 @@
 ﻿# Selenium + Java + Maven: Herramientas CLI con IA y Self‑Healing para Creación y Mantenimiento de Tests (con Integración a Jira)
-Resumen 
-Este informe profundiza en cinco tecnologías que podés usar desde la línea de comandos (CLI) o como librerías para asistir la creación y el mantenimiento de tests automatizados en un stack Selenium + Java + Maven, con integración a Jira. Se explican su funcionamiento, arquitectura, setup, flujos de uso local y en CI/CD, y patrones de integración con Jira. Las herramientas cubiertas son: Gemini CLI, OpenAI CLI, GitHub Copilot CLI, Anthropic Claude CLI y Healenium.
+Se reume como utilizar estas cinco tecnologías desde la línea de comandos (CLI) o como librerías para asistir la creación y el mantenimiento de tests automatizados en un stack Selenium + Java + Maven, con integración a Jira. Se explican su funcionamiento, arquitectura, setup, flujos de uso local y en CI/CD, y patrones de integración con Jira. Las herramientas cubiertas son: Gemini CLI, OpenAI CLI, GitHub Copilot CLI, Anthropic Claude CLI y Healenium.
 Contexto de proyecto (Selenium + Java + Maven)
 El objetivo es reducir el tiempo que se invierte en reparar tests por cambios de UI (selectores, tiempos de carga, flujo), y mejorar la estabilidad/velocidad del pipeline. Para eso combinamos:
 • Selenium + Java (tests y Page Objects)
@@ -9,523 +8,263 @@ El objetivo es reducir el tiempo que se invierte en reparar tests por cambios de
 • Self‑healing con Healenium para curar selectores en tiempo de ejecución
 • Jira para trazabilidad (issues, adjuntos, links a PRs y ejecuciones)
 
-Criterios de evaluación
-• Calidad y utilidad de la asistencia IA (capacidad para proponer locators robustos y refactors útiles).
-• Facilidad de integración con Maven/Java y con el pipeline de CI (GitHub/GitLab/Jenkins).
-• Self‑healing en runtime vs generación de parches persistentes.
-• Trazabilidad con Jira (creación de issues, adjuntar diffs/logs, vínculos a builds).
-• Coste total de propiedad (tokens/licencias/infra) y requisitos de seguridad/privacidad.
-• Curva de aprendizaje y madurez de la comunidad/ecosistema.
-Gemini CLI (open source, Google)
-¿Qué es?
-- CLI open source que interactúa con los modelos Gemini (en nube) desde terminal.
-- Extensible con MCP (Model Context Protocol) para invocar servicios externos (por ej., API de Jira).
-¿Cuándo conviene usarlo?
-- Necesitás automatizar análisis de fallos y generación de fixes sin cambiar tu stack Selenium + Java.
-- Querés producir artefactos JSON (mapeo de selectores, notas) que luego consume un script Java.
-Arquitectura / Cómo funciona
-- CLI local que envía prompts/archivos al modelo Gemini y recibe texto/JSON.
-- MCP permite declarar herramientas que ejecutan comandos o llamadas HTTP (p. ej. crear issue en Jira).
-Setup / Instalación (resumen)
-- Instalar Node y la CLI: `npm i -g @google/gemini-cli`
-- Autenticar: `gemini auth` (usar credenciales)
-- Opcional: definir una herramienta MCP `jira.mcp.json` para crear issues vía API de Jira.
-Flujo de uso local (desarrollador)
-→ Ejecutar los tests localmente con `mvn test` y capturar logs/HTML de la página fallida.
-→ Invocar `gemini` con un prompt que devuelva SOLO JSON `locator_updates.json` (old->new).
-→ Ejecutar clase Java `LocatorUpdater` que reescribe Page Objects con los nuevos selectores.
-Flujo en CI/CD (Maven)
-→ En pipeline: step `mvn test` → si falla, step `gemini` que genera `locator_updates.json`.
-→ Step Java que aplica los cambios + step que crea issue (y adjunta diff) en Jira.
-→ Opcional: abrir PR automático con el parche para revisión humana.
-Patrones de integración con Jira
-- MCP para `jira-create-issue` que envía `summary` y `description` a la API REST.
-- Segundo step que adjunta `locator_fix.patch` como archivo en el issue creado.
-Prompts / Instrucciones sugeridas
-Prompt recomendado (archivo `prompt.txt`):
-```
-Tenés: result.log (stacktrace) y dom.html (HTML de la vista fallida). Devuelve SOLO un JSON válido con el siguiente formato:
-{
-  "OLD_SELECTOR_1": "NEW_SELECTOR_1",
-  "OLD_SELECTOR_2": "NEW_SELECTOR_2"
-}
-Priorizar selectores CSS robustos (data-testid, role/aria) y XPaths estables.
-```
+# ui-tests-healenium
 
-Fortalezas
-✓ Open source en el cliente; gran flexibilidad y extensión con MCP.
-✓ Buen manejo de contexto para repositorios y logs grandes.
-✓ Se integra sin fricción con Maven/CI y con Jira.
-Limitaciones
-✗ Requiere diseñar prompts consistentes y validar la salida JSON.
-✗ Depende de servicios cloud (latencia, políticas de datos).
-Riesgos y notas prácticas
-• Asegurar que logs/HTML no contengan datos sensibles o anonimizarlos.
-• Persistir `locator_updates.json` y el diff para auditoría.
-• No aplicar cambios en main sin revisión (usar PR).
-OpenAI CLI (GPT‑4o / o3)
-¿Qué es?
-- CLI/SDK para interactuar con modelos de OpenAI desde terminal o scripts.
-- Útil para generación/edición de código, diffs y documentación.
-¿Cuándo conviene usarlo?
-- Buscás alta calidad lingüística y buenos refactors.
-- Querés un patrón igual al de Gemini (JSON con mapeo de selectores).
-Arquitectura / Cómo funciona
-- CLI local + API en la nube; entrada de prompts/archivos y salida texto/JSON.
-- Se integra con cualquier pipeline vía comandos shell.
-Setup / Instalación (resumen)
-- Instalar CLI/SDK; setear `OPENAI_API_KEY` como secreto en CI.
-- Crear script que ejecute la llamada y vuelque salida a `locator_updates.json`.
-Flujo de uso local (desarrollador)
-→ Correr `mvn test`; si falla, llamar CLI con `result.log` + `dom.html`.
-→ Consumir `locator_updates.json` desde Java y reescribir Page Objects.
-Flujo en CI/CD (Maven)
-→ Step condicional post‑falla: llamada a OpenAI → JSON → aplicar cambios → crear issue en Jira.
-→ Publicar artefactos (logs, JSON, patch) en el job.
-Patrones de integración con Jira
-- Crear issue por REST desde Java (Unirest/OkHttp) con resumen y descripción generados por IA.
-- Adjuntar `locator_fix.patch` y capturas de pantalla.
-Prompts / Instrucciones sugeridas
-Prompt base:
+Automatización UI con **Selenium + TestNG + Healenium**, generación de artefactos (DOM/screenshot/logs), y (opcional) creación de issues en **Jira**. Incluye backend de Healenium en **Docker** y ejecución local o 100% en contenedores.
+
+---
+
+## 🧭 TL;DR
+
+1. **Healenium (Docker)**
+
+   ```powershell
+   cd infra/healenium
+   docker compose up -d
+   ```
+
+   UI: [http://localhost:7878/healenium/report](http://localhost:7878/healenium/report)
+
+2. **Tests (local, Edge por defecto)**
+
+   ```powershell
+   cd ../../ui-tests-healenium
+   $env:CI="true"
+   .\mvnw.cmd -B -ntp clean test "-DBASE_URL=https://mi-app" "-DBROWSER=edge"
+   ```
+
+3. **Artifacts** (en fallos): `artifacts/<Clase>__<Método>__<timestamp>/`
+
+4. **Jira (opcional)**
+
+   ```powershell
+   $env:JIRA_BASE_URL="https://tuorg.atlassian.net"
+   $env:JIRA_USER_EMAIL="tu@email"
+   $env:JIRA_API_TOKEN="***"
+   $env:JIRA_PROJECT_KEY="QA"
+   $env:JIRA_AUTO_CREATE="true"
+   ```
+
+---
+
+## 📦 Requisitos (una sola vez)
+
+* **Docker Desktop** (o Docker Engine)
+* **JDK 21+** (recomendado 21 LTS)
+
+  * Windows: `winget install -e --id EclipseAdoptium.Temurin.21.JDK`
+  * Verificar: `java -version`
+* **VS Code** + *Extension Pack for Java* (recomendado para autocompletado/import)
+* **No hace falta Maven**: usamos **Maven Wrapper** (`mvnw`)
+
+> Si tu empresa usa proxy, configurar Docker/Java/Maven en consecuencia (ver sección *Proxy*).
+
+---
+
+## 🧰 Estructura
+
 ```
-Analizá result.log y dom.html y devolvé SOLO JSON (sin comentarios) con mapeo old->new de selectores robustos.
+repo-root/
+├─ infra/
+│  ├─ healenium/                # docker-compose backend Healenium + DB
+│  └─ tests/                    # (opcional) selenium grid + runner Maven
+└─ ui-tests-healenium/
+   ├─ pom.xml                   # Maven (target 21, TestNG, Surefire)
+   ├─ mvnw / mvnw.cmd           # Maven Wrapper
+   ├─ src/test/java/
+   │  ├─ qa/andrea/core/BaseTest.java
+   │  ├─ qa/andrea/pages/...    # Page Objects
+   │  ├─ qa/andrea/tests/...    # @Tests (TestNG)
+   │  └─ qa/andrea/support/TestListener.java
+   ├─ src/test/resources/
+   │  ├─ testng.xml             # suite (registra TestListener)
+   │  └─ healenium.properties   # URLs backend Healenium
+   └─ artifacts/                # se crea en fallos
 ```
 
-Fortalezas
-✓ Muy buena calidad de generación y explicación.
-✓ Fácil de orquestar y de adaptar a distintos repos.
-Limitaciones
-✗ Modelo no open source; coste por tokens.
-✗ Necesita guardrails para no producir JSON inválido.
-Riesgos y notas prácticas
-• Limitar el tamaño del DOM a lo relevante para reducir tokens.
-• Registrar prompts y salidas para reproducibilidad.
-GitHub Copilot CLI
-¿Qué es?
-- Complemento de Copilot que permite usar lenguaje natural en la terminal para generar comandos/código.
-- Se potencia mucho dentro del ecosistema GitHub (PRs, Actions).
-¿Cuándo conviene usarlo?
-- Tu código y CI están en GitHub y querés acelerar tareas repetitivas.
-- Necesitás scaffolding rápido de Page Objects, tests y scripts.
-Arquitectura / Cómo funciona
-- CLI que envía prompts a Copilot/GPT, con integración nativa a GitHub.
-- Ideal para generar contenido y automatizar interacciones en PRs.
-Setup / Instalación (resumen)
-- Habilitar Copilot + Copilot CLI en la organización.
-- Configurar permisos y autenticación.
-Flujo de uso local (desarrollador)
-→ Usar `gh copilot` para generar Page Objects y tests base.
-→ Explicar logs fallidos para sugerir acciones.
-Flujo en CI/CD (Maven)
-→ Actions que comentan PRs con resúmenes de fallos y links a artefactos.
-→ Crear issues en Jira vía acción de marketplace o script.
-Patrones de integración con Jira
-- Integración indirecta: Actions que llaman a la API de Jira.
-- Sin MCP propio, pero combinable con scripts.
-Prompts / Instrucciones sugeridas
-Ejemplo: `gh copilot explain result.log` o `gh copilot codegen page object for LoginPage`
-Fortalezas
-✓ Excelente experiencia si usás GitHub end‑to‑end.
-✓ Acelera generación y refactor inicial.
-Limitaciones
-✗ Menos flexible fuera de GitHub.
-✗ No está orientado a JSON machine‑readable por defecto.
-Riesgos y notas prácticas
-• Revisar todo lo generado; ajustar naming/estándares del equipo.
-Anthropic Claude CLI
-¿Qué es?
-- CLI/SDK para acceder a modelos Claude, con buen razonamiento y contexto.
-- Útil para reorganizar suites, proponer casos faltantes y refactors.
-¿Cuándo conviene usarlo?
-- Necesitás razonamiento sólido para sugerir rediseños en Page Objects.
-- Querés resúmenes claros y propuestas de estabilización (esperas, sincronización).
-Arquitectura / Cómo funciona
-- CLI local + API en nube; procesamiento de prompts y archivos.
-- Fácil de integrar al pipeline como step condicional.
-Setup / Instalación (resumen)
-- Instalar CLI/SDK y setear `ANTHROPIC_API_KEY`.
-- Escribir script que vuelque salida a `locator_updates.json`.
-Flujo de uso local (desarrollador)
-→ Correr tests, pasar logs/DOM y recibir JSON con locators + recomendaciones.
-Flujo en CI/CD (Maven)
-→ Tras fallos, step con Claude → JSON → aplicar con Java → issue Jira.
-Patrones de integración con Jira
-- REST desde Java con resumen + recomendaciones priorizadas (P0/P1/P2).
-Prompts / Instrucciones sugeridas
-Prompt típico: ‘Devolvé SOLO JSON con old->new y explica criterios en comentarios separados’.
-Fortalezas
-✓ Muy buenas explicaciones y síntesis de patrones de fallo.
-✓ Adecuado para análisis de suites grandes.
-Limitaciones
-✗ Modelo no open source; coste por tokens.
-✗ Menos tooling CLI listo que otras opciones.
-Riesgos y notas prácticas
-• Separar salida JSON (máquina) de texto explicativo (humano).
-Healenium (EPAM, Self‑Healing para Selenium)
-¿Qué es?
-- Librería open source que envuelve Selenium WebDriver y repara selectores en runtime.
-- No genera código nuevo ni JSON por sí mismo; corrige en la ejecución.
-¿Cuándo conviene usarlo?
-- Querés resiliencia inmediata ante cambios menores en UI.
-- Tenés gran base Selenium + Java y querés reducir fallos por selectores.
-Arquitectura / Cómo funciona
-- SelfHealingDriver sustituye al WebDriver y aplica heurísticas para localizar elementos alternativos.
-- Puede usar un backend (docker) para almacenar y versionar el mapa de localización.
-Setup / Instalación (resumen)
-- Agregar dependencia `healenium-web` en pom.xml.
-- Opcional: levantar healenium‑docker para almacenamiento y UI de análisis.
-Flujo de uso local (desarrollador)
-→ Reemplazar `new ChromeDriver()` por `SelfHealingDriver.create(driver)` y ejecutar normalmente.
-Flujo en CI/CD (Maven)
-→ Pipeline estándar; publicar reporte de curaciones y adjuntarlo a Jira.
-Patrones de integración con Jira
-- Adjuntar un resumen con ‘qué selector original se curó’ y sugerir un cambio persistente posterior.
-Prompts / Instrucciones sugeridas
-Complemento IA (opcional): exportar curaciones a un JSON y alimentar a Gemini/OpenAI para producir un parche.
-Fortalezas
-✓ Open source, integración sencilla, impacto inmediato en estabilidad.
-✓ No requiere cambiar toda la suite.
-Limitaciones
-✗ No deja cambios persistentes en el código por defecto.
-✗ No cubre refactors estructurales ni cambios de flujo.
-Riesgos y notas prácticas
-• Usarlo como ‘airbag’, no como reemplazo de buenas prácticas de locators.
-• Persistir las curaciones más frecuentes como parches reales.
-4) Código central reusable (Java)
-Clase `scripts/LocatorUpdater.java` para aplicar JSON `locator_updates.json` a los Page Objects:
-```java
-package scripts;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.*; import java.nio.file.*; import java.util.*;
-public class LocatorUpdater {
-  public static void main(String[] args) throws Exception {
-    Map<String,String> map = new ObjectMapper().readValue(new File("locator_updates.json"), Map.class);
-    Files.walk(Paths.get("src/test/java")).filter(Files::isRegularFile).forEach(p -> {
-      try {
-        String src = Files.readString(p), out = src;
-        for (var e : map.entrySet()) {
-          out = out.replace("By.xpath(\""+e.getKey()+"\")", "By.xpath(\""+e.getValue()+"\")");
-          out = out.replace("By.cssSelector(\""+e.getKey()+"\")", "By.cssSelector(\""+e.getValue()+"\")");
-        }
-        if (!src.equals(out)) Files.writeString(p, out);
-      } catch (IOException ex) { ex.printStackTrace(); }
-    });
-  }
-}
+---
+
+## 🚀 Primeros pasos
+
+### 1) Clonar
+
+```powershell
+git clone <URL_DEL_REPO>
+cd <carpeta-del-repo>
 ```
-Crear issue y adjuntar patch en Jira desde Java (Unirest):
-```java
-HttpResponse<String> res = Unirest.post("https://"+System.getenv("JIRA_DOMAIN")+".atlassian.net/rest/api/2/issue")
-  .basicAuth(System.getenv("JIRA_USER"), System.getenv("JIRA_API_TOKEN"))
-  .header("Content-Type","application/json")
-  .body("{\\"fields\\":{\\"project\\":{\\"key\\":\\"QA\\"},\\"summary\\":\\"Fallo en tests\\",\\"description\\":\\"Se adjunta patch\\",\\"issuetype\\":{\\"name\\":\\"Bug\\"}}}")
-  .asString();
-// Parsear res para obtener ISSUE_KEY
-HttpResponse<String> upload = Unirest.post("https://"+System.getenv("JIRA_DOMAIN")+".atlassian.net/rest/api/2/issue/"+ISSUE_KEY+"/attachments")
-  .basicAuth(System.getenv("JIRA_USER"), System.getenv("JIRA_API_TOKEN"))
-  .header("X-Atlassian-Token","no-check")
-  .field("file", new File("locator_fix.patch"))
-  .asString();
+
+### 2) Backend Healenium (Docker)
+
+```powershell
+cd infra/healenium
+docker compose up -d
+docker compose ps
 ```
-5) Ejemplos CI/CD (resumen)
-GitHub Actions:
-```yaml
-jobs:
-  test-and-fix:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: {distribution: 'temurin', java-version: '17'}
-      - run: mvn -B test || echo 'TEST_FAILED' > result.log
-      - run: npm i -g @google/gemini-cli && gemini auth --no-open-browser
-      - if: failure()
-        run: gemini -p "Analiza result.log y dom.html; devolvé SOLO JSON old->new" > locator_updates.json
-      - if: failure()
-        run: mvn -q -DskipTests=true exec:java -Dexec.mainClass=scripts.LocatorUpdater
-      - if: failure()
-        run: echo "Crear issue Jira y adjuntar patch" # ver sección Jira
+
+Abrí: `http://localhost:7878/healenium/report`
+
+### 3) Ejecutar tests **locales**
+
+```powershell
+cd ../../ui-tests-healenium
+$env:CI="true"  # headless + logs consistentes
+
+# Edge (Windows) – recomendado para empezar
+.\mvnw.cmd -B -ntp clean test "-DBASE_URL=https://mi-app" "-DBROWSER=edge"
+
+# Chrome local
+.\mvnw.cmd -B -ntp clean test "-DBASE_URL=https://mi-app" "-DBROWSER=chrome"
 ```
-Jenkins (declarativo):
-```groovy
-pipeline {
-  agent any
-  stages {
-    stage('Test') { steps { sh 'mvn -B test || echo TEST_FAILED > result.log' } }
-    stage('AI Fix') {
-      when { expression { currentBuild.currentResult != 'SUCCESS' } }
-      steps {
-        sh 'npm i -g @google/gemini-cli && gemini auth --no-open-browser'
-        sh 'gemini -p "Analiza result.log+dom.html; Solo JSON" > locator_updates.json'
-        sh 'mvn -q -DskipTests=true exec:java -Dexec.mainClass=scripts.LocatorUpdater'
-      }
-    }
-  }
-}
-Cuadro Comparativo
-Herramienta	Tipo	Ventaja principal	Limitación clave	Integración Jira	Uso en CI
-Gemini CLI	IA CLI + MCP	Extensibilidad MCP; JSON machine-friendly	Requiere buen prompt/validación	Sí (MCP/API)	Excelente
-OpenAI CLI	IA CLI	Calidad de generación/explicación	Costo por tokens; guardrails	Sí (API)	Excelente
-Copilot CLI	IA CLI (GitHub)	Ecosistema GitHub y PRs	Menos flexible fuera de GitHub	Indirecta	Muy bueno
-Claude CLI	IA CLI	Razonamiento/contexto	Menos tooling listo	Sí (API)	Muy bueno
-Healenium	Self‑Healing	Curación inmediata runtime	No parchea código	Indirecta	Muy bueno
-Recomendaciones por escenario
-• Resiliencia inmediata sin cambiar código: Healenium + métricas de curación.
-• Parche persistente y PR automático: Gemini CLI u OpenAI CLI + LocatorUpdater + Jira.
-• Ecosistema GitHub fuerte: Copilot CLI + Actions + integración Jira.
-• Suites grandes y deuda técnica alta: Claude para análisis y re‑arquitectura de Page Objects.
-• Gobierno/seguridad: anonimizar logs/DOM y versionar prompts/salidas JSON.
 
- 
-Comparativa de herramientas gratuitas
-1. Gemini CLI (Google)
-•	Ofrece un tier gratuito muy generoso: alrededor de 60 solicitudes/minuto y 1.000 solicitudes/día The Verge+5VentureBeat+5Medium+5.
-•	Inicialmente permite usar el modelo Gemini 2.5 Pro durante ~10–15 prompts; luego baja automáticamente a modelo Flash, menos potente, cuando se alcanza el límite Reddit+15GitHub+15Medium+15.
-•	Es open source, no requiere tarjeta de crédito: alcanza para automación de tests sin costo significativo Comunidad OpenAI+1.
-2. OpenAI CLI (API)
-•	No tiene tier verdaderamente gratuito, salvo créditos promocionales temporales (por ejemplo, los $5 iniciales) o si habilitás "compartir datos de entrenamiento" Comunidad OpenAI+3milvus.io+3Reddit+3.
-•	Los precios oficiales son accesibles: GPT 4o mini cuesta $0.15 por millón de tokens de entrada y $0.60 por millón de tokens de salida The Verge+15en.wikipedia.org+15Google AI for Developers+15.
-•	En Reddit, algunos mencionan que, para usos muy simples, el gasto puede ser realmente bajo (< $2/mes) Reddit+1.
-3. Copilot CLI
-•	La experiencia gratuita es limitada: requiere una cuenta Copilot (de pago).
-•	Las alternativas gratuitas reales no están disponibles; no se considera una opción viable si buscás minimizar costos.
-4. Claude CLI (Anthropic)
-•	No se encontraron referencias claras de un tier gratuito significativo.
-•	Es muy probable que funcione solo mediante planes pagos, por lo que no entra en la comparación de costo-beneficio gratis.
-5. Healenium (Self-Healing)
-•	100 % open source y gratuito.
-•	No depende de tokens ni APIs pagas.
-•	Es una excelente opción para mejorar la robustez de tests en tiempo de ejecución sin gasto alguno.
- 
-Para una solución completa sin costo:
-1.	Usá Healenium para auto-curación en tiempo real.
-2.	Usá Gemini CLI para generación de parches persistentes y draft de fixes usando el JSON (por ejemplo, locator_updates.json).
-Esta combinación te brinda lo mejor de ambos mundos en escenarios de pruebas automatizadas con Selenium + Java + Maven, sin ningún gasto extra.
+> El `pom.xml` ya fuerza **TestNG** vía Surefire y usa `src/test/resources/testng.xml`.
 
-Flujo mínimo completo:
-Combina Healenium (self-healing gratis) + Gemini CLI (tier free) para estabilizar y mantener tus tests Selenium + Java + Maven. 
-1.	Healenium “cura” selectores rotos en runtime para que el test no falle.
-2.	Si hubo curaciones o fallas, Gemini CLI analiza logs + DOM y te devuelve un JSON con reemplazos de selectores (parche persistente).
-3.	Un script Java aplica esos cambios a tus Page Objects.
-4.	(Opcional) se registra todo en Jira.
+### 4) Ver resultados
 
-1)	Dependencias Maven
-<!-- pom.xml -->
-<dependencies>
-  <!-- Selenium -->
-  <dependency>
-    <groupId>org.seleniumhq.selenium</groupId>
-    <artifactId>selenium-java</artifactId>
-    <version>4.23.0</version>
-  </dependency>
+* Consola: `Tests run: ...`.
+* En fallos: `artifacts/<Clase>__<Método>__YYYYMMDD_HHMMSS/`
 
-  <!-- TestNG -->
-  <dependency>
-    <groupId>org.testng</groupId>
-    <artifactId>testng</artifactId>
-    <version>7.11.0</version>
-    <scope>test</scope>
-  </dependency>
+  * `screenshot.png`
+  * `DOM.html`
+  * `browser.log`
+* Healenium dashboard: `http://localhost:7878/healenium/report`
 
-  <!-- Healenium (self-healing) -->
-  <dependency>
-    <groupId>com.epam.healenium</groupId>
-    <artifactId>healenium-web</artifactId>
-    <version>3.5.1</version>
-  </dependency>
+---
 
-  <!-- Jackson para leer/escribir JSON -->
-  <dependency>
-    <groupId>com.fasterxml.jackson.core</groupId>
-    <artifactId>jackson-databind</artifactId>
-    <version>2.17.2</version>
-  </dependency>
+## 🐳 Ejecutar **todo en Docker** (opcional)
 
-  <!-- (Opcional) Unirest para Jira REST -->
-  <dependency>
-    <groupId>com.konghq</groupId>
-    <artifactId>unirest-java</artifactId>
-    <version>3.14.5</version>
-  </dependency>
-</dependencies>
+Requiere que `BaseTest` soporte **RemoteWebDriver** cuando exista `REMOTE_GRID_URL`.
 
-<build>
-  <plugins>
-    <plugin>
-      <groupId>org.apache.maven.plugins</groupId>
-      <artifactId>maven-surefire-plugin</artifactId>
-      <version>3.2.5</version>
-    </plugin>
-    <!-- Para ejecutar una clase Java (LocatorUpdater) desde mvn -->
-    <plugin>
-      <groupId>org.codehaus.mojo</groupId>
-      <artifactId>exec-maven-plugin</artifactId>
-      <version>3.3.0</version>
-    </plugin>
-  </plugins>
-</build>
+1. Levantar Selenium + Runner:
 
-2)	Setup del driver con Healenium (Con esto, si cambia un selector, Healenium intentará “curarlo” en tiempo real y el test seguirá)
-// BaseTest.java
-import com.epam.healenium.SelfHealingDriver;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
-import org.testng.annotations.*;
+```powershell
+cd infra/tests
+docker compose up --build
+```
 
-public class BaseTest {
-  protected WebDriver driver;
+* Servicio `selenium`: `:4444`
+* Servicio `runner`: monta tu repo y ejecuta `./mvnw` apuntando al grid
+* Healenium se consume por nombre de servicio desde la misma red Docker
 
-  @BeforeClass
-  public void setUp() {
-    WebDriver raw = new ChromeDriver();
-    driver = SelfHealingDriver.create(raw); // <- magia de Healenium
-    driver.manage().window().maximize();
-  }
+**Artifacts** aparecen igualmente en `ui-tests-healenium/artifacts` (en tu host).
 
-  @AfterClass(alwaysRun = true)
-  public void tearDown() {
-    if (driver != null) driver.quit();
-  }
-}
+Para apagar:
+
+```powershell
+docker compose down
+```
+
+---
+
+## ⚙️ Variables y parámetros
+
+Se pueden definir como **vars de entorno** o `-Dproperty` al ejecutar Maven.
+
+**Aplicación bajo prueba**
+
+```
+BASE_URL=https://mi-app.tuempresa.com
+```
+
+**Navegador / Grid**
+
+```
+BROWSER=edge|chrome
+REMOTE_GRID_URL=http://localhost:4444/wd/hub   # activa modo Grid (Docker)
+CI=true                                        # headless, etc.
+```
+
+**Healenium** (`src/test/resources/healenium.properties`)
+
+```
+hlm.server.url=http://localhost:7878
+hlm.imitator.url=http://localhost:8000
+score-cap=0.6
+heal-enabled=true
+recovery-tries=1
+```
+
+> En Docker, el runner sobreescribe esas URLs a `http://healenium:7878` / `http://selector-imitator:8000`.
+
+**Jira (opcional)**
+
+```
+JIRA_BASE_URL=https://tuorg.atlassian.net
+JIRA_USER_EMAIL=tu@email
+JIRA_API_TOKEN=***
+JIRA_PROJECT_KEY=QA
+JIRA_AUTO_CREATE=true
+```
+
+Ejemplos:
+
+```powershell
+.\mvnw.cmd -B -ntp clean test `
+  "-DBASE_URL=https://mi-app" "-DBROWSER=edge" "-Dsurefire.printSummary=true"
+```
+
+---
+
+## 🧪 Cómo escribir y correr tests
+
+* Ubicación: `src/test/java/qa/andrea/tests/…`
+* Page Objects: `src/test/java/qa/andrea/pages/…` (locators `By.*` o `@FindBy`)
+* Suite: `src/test/resources/testng.xml`
+* Healenium “cura” selectores automáticamente al fallar (luego de haber aprendido en corridas verdes).
+
+Comandos útiles:
+
+```powershell
+# Toda la suite (usa testng.xml)
+.\mvnw.cmd -B -ntp clean test "-Dsurefire.suiteXmlFiles=src/test/resources/testng.xml"
+
+# Por grupos TestNG (smoke, regression…)
+.\mvnw.cmd -B -ntp clean test "-Dgroups=smoke" "-Dsurefire.suiteXmlFiles=src/test/resources/testng.xml"
+
+# Por patrón de clase
+.\mvnw.cmd -B -ntp -Dtest="*LoginTest" test
+```
+
+---
+
+## 🐞 Jira (opcional)
+
+Si `JIRA_AUTO_CREATE=true`, ante un fallo el listener:
+
+* crea un **Bug** en el proyecto `JIRA_PROJECT_KEY`
+* adjunta `screenshot.png`, `DOM.html` y `browser.log`
+
+Requisitos: token de API, permisos de *Create Issue* y *Attach files*.
+
+---
+
+## 🧪 Healenium: flujo recomendado
+
+1. Correr **smoke** verde para sembrar baseline de locators
+2. Ante cambios de DOM, Healenium intentará *healing* según `score-cap` y `recovery-tries`
+3. Revisar dashboard para ver curaciones y ajustar locators si fuera necesario
+
+> Consejo: acordar con frontend usar **data-testid** para locators robustos.
+
+---
+
+## 🛠️ Troubleshooting rápido
+
+* **“No tests to run”** → no hay clases en `src/test/java` o `testng.xml` apunta mal
+* **`\ufeff illegal character`** → guardar `.java` en **UTF‑8 sin BOM**
+* **Chrome no instalado** → usar `-DBROWSER=edge` o correr vía Grid
+* **Healenium no levanta** → `docker compose logs` en `infra/healenium`; verificar puertos 7878/8000
+* **Proxy corporativo** → configurar Docker y `~/.m2/settings.xml` (proxy + mirror Nexus/Artifactory)
+
+---
+
+## 🧱 Notas de CI (resumen)
+
+* PR: suite **smoke** + cache Maven + artifacts de fallos
+* Nightly: **regression** completa + publicar reporte + (opcional) crear ticket consolidado
+* Matriz opcional: `BROWSER=edge|chrome`
+
+---
 
 
-3)	Guardar logs y DOM cuando algo falla (Así le damos a Gemini contexto (logs + DOM) para proponer nuevos selectores.)
-// TestListener.java (registralo con @Listeners en tu suite TestNG)
-import org.openqa.selenium.*;
-import org.testng.*;
-
-import java.io.*;
-import java.nio.file.*;
-
-public class TestListener implements ITestListener {
-  @Override
-  public void onTestFailure(ITestResult result) {
-    Object instance = result.getInstance();
-    if (instance instanceof BaseTest) {
-      WebDriver driver = ((BaseTest) instance).driver;
-      // Guardar HTML de la página (DOM)
-      try {
-        String dom = driver.getPageSource();
-        Files.writeString(Path.of("artifacts/dom.html"), dom);
-      } catch (Exception ignored) {}
-
-      // Guardar “stacktrace”/mensaje
-      try {
-        Throwable t = result.getThrowable();
-        Files.writeString(Path.of("artifacts/result.log"),
-            t != null ? t.toString() : "Fallo sin stacktrace");
-      } catch (Exception ignored) {}
-    }
-  }
-}
-
-4)	 Prompt + Gemini CLI (gratis):
-•	Instalá y autenticá una vez:
-npm i -g @google/gemini-cli
-gemini auth  # seguí el flujo
-•	Creá un prompt claro (por ej. prompts/locator_prompt.txt):
-Tenés: artifacts/result.log (stacktrace) y artifacts/dom.html (HTML de la vista fallida).
-Devolvé SOLO un JSON válido con formato:
-{
-  "OLD_SELECTOR_1": "NEW_SELECTOR_1",
-  "OLD_SELECTOR_2": "NEW_SELECTOR_2"
-}
-Priorizá selectores CSS robustos (data-testid, role/aria). Evitá índices frágiles.
-•	Ejecutá (manual o en CI cuando falle):
-gemini -p "$(cat prompts/locator_prompt.txt)" \
-  -f artifacts/result.log \
-  -f artifacts/dom.html > locator_updates.json
-
-5)	Aplicar los cambios a los Page Objects (Java) : Sugerencia: en lugar de commitear directo, generá un PR automático.
-// src/main/java/scripts/LocatorUpdater.java
-package scripts;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.File;
-import java.nio.file.*;
-import java.util.Map;
-
-public class LocatorUpdater {
-  public static void main(String[] args) throws Exception {
-    Map<String,String> updates = new ObjectMapper()
-        .readValue(new File("locator_updates.json"), Map.class);
-
-    Files.walk(Paths.get("src/test/java"))
-      .filter(Files::isRegularFile)
-      .filter(p -> p.toString().endsWith(".java"))
-      .forEach(path -> {
-        try {
-          String src = Files.readString(path);
-          String out = src;
-          for (var e : updates.entrySet()) {
-            // Reemplazos típicos (podés ampliar según tu estilo)
-            out = out.replace("By.xpath(\"" + e.getKey() + "\")", "By.xpath(\"" + e.getValue() + "\")");
-            out = out.replace("By.cssSelector(\"" + e.getKey() + "\")", "By.cssSelector(\"" + e.getValue() + "\")");
-          }
-          if (!src.equals(out)) {
-            Files.writeString(path, out);
-            System.out.println("Updated: " + path);
-          }
-        } catch (Exception ex) {
-          ex.printStackTrace();
-        }
-      });
-  }
-}
-•	Ejecutalo con Maven:
-mvn -q -DskipTests=true exec:java -Dexec.mainClass=scripts.LocatorUpdater
-
-6)	Pipeline CI (GitHub Actions – ejemplo conciso)
-# .github/workflows/tests.yml
-name: tests
-on: [push, pull_request]
-
-jobs:
-  test-and-heal:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
-        with: { distribution: temurin, java-version: '17' }
-
-      - name: Run tests (Healenium activa)
-        run: mvn -B test || echo 'TEST_FAILED' > artifacts/result.log
-
-      - name: Gemini: sugerir nuevos selectores
-        if: failure()
-        run: |
-          npm i -g @google/gemini-cli
-          gemini auth --no-open-browser
-          gemini -p "$(cat prompts/locator_prompt.txt)" \
-            -f artifacts/result.log -f artifacts/dom.html > locator_updates.json
-
-      - name: Aplicar cambios (Java)
-        if: failure()
-        run: mvn -q -DskipTests=true exec:java -Dexec.mainClass=scripts.LocatorUpdater
-
-      # (Opcional) crear issue en Jira y adjuntar los artefactos/patch
-
-7)	(Opcional) Crear issue en Jira y adjuntar patch:
-•	Si querés abrir issue automáticamente:
-// Ejemplo mínimo con Unirest (parseá el JSON del response para obtener ISSUE_KEY)
-HttpResponse<String> res = Unirest.post("https://"+System.getenv("JIRA_DOMAIN")+".atlassian.net/rest/api/2/issue")
-  .basicAuth(System.getenv("JIRA_USER"), System.getenv("JIRA_API_TOKEN"))
-  .header("Content-Type","application/json")
-  .body("{\"fields\":{\"project\":{\"key\":\"QA\"},\"summary\":\"Fallo en tests\",\"issuetype\":{\"name\":\"Bug\"}}}")
-  .asString();
-System.out.println(res.getBody());
-
-•	Adjuntar un archivo (por ejemplo un locator_fix.patch si generás diffs):
-curl -u "$JIRA_USER:$JIRA_API_TOKEN" -X POST \
-  -H "X-Atlassian-Token: no-check" \
-  -F "file=@locator_fix.patch" \
-  https://$JIRA_DOMAIN.atlassian.net/rest/api/2/issue/QA-123/attachments
-
-Reglas de oro (para que rinda sin costo):
-•	Healenium enciéndelo siempre en local y CI: estabiliza de inmediato.
-•	Gemini CLI solo cuando haya fallos (o curaciones frecuentes) → menos prompts = 0 costo.
-•	Pedile a Gemini solo JSON, validalo, y aplicá PR (no pushes directos).
-•	Priorizá CSS/data-testid/aria sobre XPaths frágiles.
-•	Adjuntá en Jira el JSON y, si generás, el patch para trazabilidad.
 
 
